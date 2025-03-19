@@ -1,0 +1,122 @@
+#!./.venv/bin/python
+import re
+import requests
+
+GITHUB_API = "https://api.github.com"
+
+def _get_headers(token):
+    return {
+        "Authorization": f"token {token}",
+        "Accept": "application/vnd.github+json",
+    }
+
+
+def _is_pr_ready_for_review(pr):
+    return not pr["draft"] and pr["state"] == "open"
+
+
+def _is_pr_author_in_list(pr, authors):
+    return (pr["user"]["login"] or "").lower() in authors
+
+
+def get_next_page_url(link_header):
+    # Regex to find the URL corresponding to the 'rel=next' in the Link header
+    match = re.search(r'<(https://[^>]+)>; rel="next"', link_header)
+    if match:
+        return match.group(1)  # Extracted URL
+    return None
+
+
+def get_ready_prs_by_authors(org, repo, authors, token):
+    headers = _get_headers(token)
+    url = f"{GITHUB_API}/repos/{org}/{repo}/pulls?state=open&per_page=100"
+    all_prs = []
+    while url:
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+        prs = response.json()
+        all_prs.extend([pr for pr in prs if _is_pr_ready_for_review(pr) and _is_pr_author_in_list(pr, authors)])
+        link_header = response.headers.get("Link")
+        url = get_next_page_url(link_header)
+            #url = link_header.split(",")[0].split(";")[0].strip("<>")
+    return all_prs
+
+
+def get_commit_status(org, repo, sha, token):
+    url = f"{GITHUB_API}/repos/{org}/{repo}/commits/{sha}/status"
+    headers = _get_headers(token)
+    response = requests.get(url, headers=headers)
+    response.raise_for_status()
+    status = response.json()
+    return status["state"], status["statuses"]
+
+def get_pr_approvals(org, repo, pull_number, token):
+    """
+    Fetch the approvals for a GitHub Pull Request.
+
+    Args:
+        github_api (str): The base URL for the GitHub API (e.g., 'https://api.github.com').
+        org (str): The GitHub organization or username.
+        repo (str): The GitHub repository name.
+        pull_number (int): The number of the pull request.
+        token (str): Your GitHub personal access token.
+
+    Returns:
+        list: A list of usernames who approved the pull request.
+    """
+    url = f"{GITHUB_API}/repos/{org}/{repo}/pulls/{pull_number}/reviews"
+    headers = _get_headers(token)
+    response = requests.get(url, headers=headers)
+    response.raise_for_status()
+    reviews = response.json()
+    approvals = [
+        review for review in reviews if review['state'] == "APPROVED"
+    ]
+    return [rv["user"]["login"].lower() for rv in approvals]
+    # return [rv["user"]["login"] for rv in reviews]
+
+def get_pr_reviewers(org, repo, pull_number, token):
+    """
+    Fetch the assigned reviewers for a GitHub Pull Request.
+
+    Args:
+        github_api (str): The base URL for the GitHub API (e.g., 'https://api.github.com').
+        org (str): The GitHub organization or username.
+        repo (str): The GitHub repository name.
+        pull_number (int): The number of the pull request.
+        token (str): Your GitHub personal access token.
+
+    Returns:
+        list: A list of usernames who reviewed the pull request.
+    """
+    url = f"{GITHUB_API}/repos/{org}/{repo}/pulls/{pull_number}/requested_reviewers"
+    headers = _get_headers(token)
+    response = requests.get(url, headers=headers)
+    response.raise_for_status()
+    reviewers = response.json()
+    return [rv["login"].lower() for rv in reviewers["users"]]
+
+
+def add_reviewer(org, repo, pull_number, reviewer, token):
+    """
+    Add a reviewer to a GitHub Pull Request.
+
+    Args:
+        github_api (str): The base URL for the GitHub API (e.g., 'https://api.github.com').
+        org (str): The GitHub organization or username.
+        repo (str): The GitHub repository name.
+        pull_number (int): The number of the pull request.
+        reviewer (str): The username of the reviewer to add.
+        token (str): Your GitHub personal access token.
+
+    Returns:
+        dict: The response from the API.
+    """
+    url = f"{GITHUB_API}/repos/{org}/{repo}/pulls/{pull_number}/requested_reviewers"
+    headers = _get_headers(token)
+    data = {
+        "reviewers": [reviewer]
+    }
+    response = requests.post(url, headers=headers, json=data)
+    response.raise_for_status()
+    return response.json()
