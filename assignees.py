@@ -3,7 +3,7 @@ import json
 import random
 import re
 
-from bin.gh.prs import add_reviewer, get_ready_prs_by_authors, get_pr_approvals, get_pr_reviewers
+from bin.gh.prs import add_reviewer, get_ready_prs_by_authors, get_pr_approvers_and_past_reviewers, get_pr_reviewers
 from bin.jira.tickets import get_ticket_status
 
 
@@ -88,7 +88,15 @@ def _print_pr_info(pr_number, pr_title, pr_author, ticket_status, pr_url):
     print(f"  -> LINK: {pr_url}")
 
 
-def _assign_reviewer(pr_number, pr_author, pr_url, pr_title, ticket_status, assigned_prs_per_user, next_assignee_pr_count, gh_users, slack_users_by_gh_users_dict):
+def _assign_reviewer(pr_number, pr_author, assigned_prs_per_user, next_assignee_pr_count, gh_users,
+                     past_reviewers, slack_users_by_gh_users_dict):
+    eligible_previous_reviewers = [user for user in past_reviewers if user in gh_users and user != pr_author]
+    if eligible_previous_reviewers:
+        reviewer = eligible_previous_reviewers[0]
+        assigned_prs_per_user[reviewer] = assigned_prs_per_user.get(reviewer, 0) + 1
+        print(f"  -> Reassigning to previous reviewer @{slack_users_by_gh_users_dict[reviewer]}")
+        add_reviewer(ORG, REPO, pr_number, reviewer, GH_TOKEN)
+        return next_assignee_pr_count
     possible_assignees = []
     while not possible_assignees and next_assignee_pr_count < 10:
         for user, count in assigned_prs_per_user.items():
@@ -120,8 +128,10 @@ def _assign_prs(to_assign, assigned_prs_per_user, next_assignee_pr_count, gh_use
         pr_url = pr_data[1]
         pr_title = pr_data[2]
         ticket_status = pr_data[3]
+        past_reviewers = pr_data[4]
         _print_pr_info(pr_number, pr_title, pr_author, ticket_status, pr_url)
-        next_assignee_pr_count = _assign_reviewer(pr_number, pr_author, pr_url, pr_title, ticket_status, assigned_prs_per_user, next_assignee_pr_count, gh_users, slack_users_by_gh_users_dict)
+        next_assignee_pr_count = _assign_reviewer(pr_number, pr_author, assigned_prs_per_user, next_assignee_pr_count,
+                                                  gh_users, past_reviewers, slack_users_by_gh_users_dict)
 
 
 def assign_pending_prs(prs, slack_users_by_gh_users_dict, gh_users):
@@ -133,7 +143,7 @@ def assign_pending_prs(prs, slack_users_by_gh_users_dict, gh_users):
         pr_author = pr['user']['login'].lower()
         ticket_status = _get_ticket_status(pr_title)
         if _is_ready_for_review(ticket_status):
-            approvals = get_pr_approvals(ORG, REPO, pr_number, GH_TOKEN)
+            approvals, past_reviewers = get_pr_approvers_and_past_reviewers(ORG, REPO, pr_number, GH_TOKEN)
             reviewers = get_pr_reviewers(ORG, REPO, pr_number, GH_TOKEN)
             if not _approved_by_us(approvals, gh_users):
                 if _assigned_to_us(reviewers, gh_users):
@@ -141,7 +151,7 @@ def assign_pending_prs(prs, slack_users_by_gh_users_dict, gh_users):
                     reviewer = _handle_assigned_pr(reviewers, gh_users, slack_users_by_gh_users_dict)
                     assigned_prs_per_user[reviewer] = assigned_prs_per_user.get(reviewer, 0) + 1
                 else:
-                    to_assign[pr_number] = (pr_author, pr_url, pr_title, ticket_status)
+                    to_assign[pr_number] = (pr_author, pr_url, pr_title, ticket_status, past_reviewers)
             else:
                 _handle_approved_pr(pr_number, pr_title, pr_author, ticket_status, approvals, gh_users)
     _assign_prs(to_assign, assigned_prs_per_user, next_assignee_pr_count, gh_users, slack_users_by_gh_users_dict)

@@ -50,7 +50,7 @@ def get_commit_status(org, repo, sha, token):
     status = response.json()
     return status["state"], status["statuses"]
 
-def get_pr_approvals(org, repo, pull_number, token):
+def get_pr_approvers_and_past_reviewers(org, repo, pull_number, token):
     """
     Fetch the approvals for a GitHub Pull Request.
 
@@ -72,8 +72,13 @@ def get_pr_approvals(org, repo, pull_number, token):
     approvals = [
         review for review in reviews if review['state'] == "APPROVED"
     ]
-    return [rv["user"]["login"].lower() for rv in approvals]
-    # return [rv["user"]["login"] for rv in reviews]
+    non_approvals = [
+        review for review in reviews if review['state'] != "APPROVED"
+    ]
+    approvers = [rv["user"]["login"].lower() for rv in approvals]
+    non_approvers = [rv["user"]["login"].lower() for rv in non_approvals if rv["user"]["login"] not in approvers]
+    return approvers, non_approvers
+
 
 def get_pr_reviewers(org, repo, pull_number, token):
     """
