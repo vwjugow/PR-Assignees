@@ -1,0 +1,14 @@
+# Vim
+*.sw?
+
+# Python
+*.pyc
+__pycache__/
+
+# Pycharm
+.idea/
+*.iml
+
+# Misc
+# asdf
+.tool-versions
