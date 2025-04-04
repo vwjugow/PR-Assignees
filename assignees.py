@@ -102,13 +102,14 @@ def _assign_reviewer(pr_number, pr_author, assigned_prs_per_user, next_assignee_
         for user, count in assigned_prs_per_user.items():
             if count == next_assignee_pr_count and user != pr_author:
                 possible_assignees.append(user)
-        next_assignee_pr_count += 1
+        if not possible_assignees:
+            next_assignee_pr_count += 1
     reviewer = random.choice(possible_assignees) if possible_assignees else None
     if reviewer:
         assigned_prs_per_user[reviewer] = assigned_prs_per_user.get(reviewer, 0) + 1
         print(f"  -> Assigning to @{slack_users_by_gh_users_dict[reviewer]} for review")
         add_reviewer(ORG, REPO, pr_number, reviewer, GH_TOKEN)
-    return next_assignee_pr_count - 1
+    return next_assignee_pr_count
 
 
 def _is_ready_for_review(ticket_status):
@@ -122,7 +123,8 @@ def _assigned_to_us(reviewers, gh_users):
     return reviewers and any(user in gh_users for user in reviewers)
 
 
-def _assign_prs(to_assign, assigned_prs_per_user, next_assignee_pr_count, gh_users, slack_users_by_gh_users_dict):
+def _assign_prs(to_assign, assigned_prs_per_user, gh_users, slack_users_by_gh_users_dict):
+    next_assignee_pr_count = 0
     for pr_number, pr_data in to_assign.items():
         pr_author = pr_data[0]
         pr_url = pr_data[1]
@@ -136,7 +138,6 @@ def _assign_prs(to_assign, assigned_prs_per_user, next_assignee_pr_count, gh_use
 
 def assign_pending_prs(prs, slack_users_by_gh_users_dict, gh_users):
     assigned_prs_per_user = {u: 0 for u in gh_users}
-    next_assignee_pr_count = 0
     to_assign = {}
     for pr in prs:
         pr_number, pr_url, pr_title = pr["number"], pr["html_url"], pr["title"].split("|")[0].strip()
@@ -154,7 +155,7 @@ def assign_pending_prs(prs, slack_users_by_gh_users_dict, gh_users):
                     to_assign[pr_number] = (pr_author, pr_url, pr_title, ticket_status, past_reviewers)
             else:
                 _handle_approved_pr(pr_number, pr_title, pr_author, ticket_status, approvals, gh_users)
-    _assign_prs(to_assign, assigned_prs_per_user, next_assignee_pr_count, gh_users, slack_users_by_gh_users_dict)
+    _assign_prs(to_assign, assigned_prs_per_user, gh_users, slack_users_by_gh_users_dict)
 
 
 def main():
