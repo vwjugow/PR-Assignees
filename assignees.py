@@ -88,16 +88,35 @@ def _print_pr_info(pr_number, pr_title, pr_author, ticket_status, pr_url):
     print(f"  -> LINK: {pr_url}")
 
 
-def _assign_reviewer(pr_number, pr_author, assigned_prs_per_user, next_assignee_pr_count, gh_users,
-                     slack_users_by_gh_users_dict):
+def _assign_reviewer(pr_number, pr_author, assigned_prs_per_user, next_assignee_pr_count, slack_users_by_gh_users_dict):
     possible_assignees = []
     while not possible_assignees and next_assignee_pr_count < 10:
         for user, count in assigned_prs_per_user.items():
-            if count == next_assignee_pr_count and user != pr_author:
+            if count <= next_assignee_pr_count and user != pr_author:
                 possible_assignees.append(user)
         if not possible_assignees:
             next_assignee_pr_count += 1
-    reviewer = random.choice(possible_assignees) if possible_assignees else None
+    reviewer = None
+    if possible_assignees:
+        # Group assignees by their PR count
+        assignees_by_count = {}
+        for user in possible_assignees:
+            count = assigned_prs_per_user[user]
+            if count not in assignees_by_count:
+                assignees_by_count[count] = []
+            assignees_by_count[count].append(user)
+
+        # Get assignees with the lowest PR count
+        min_count = min(assignees_by_count.keys())
+        min_count_assignees = assignees_by_count[min_count]
+
+        # If there's only one assignee with the lowest count, choose them
+        # Otherwise randomly select from those with the lowest count
+        if len(min_count_assignees) == 1:
+            reviewer = min_count_assignees[0]
+        else:
+            reviewer = random.choice(min_count_assignees)
+
     if reviewer:
         assigned_prs_per_user[reviewer] = assigned_prs_per_user.get(reviewer, 0) + 1
         print(f"  -> Assigning to @{slack_users_by_gh_users_dict[reviewer]} for review")
@@ -116,7 +135,7 @@ def _assigned_to_us(reviewers, gh_users):
     return reviewers and any(user in gh_users for user in reviewers)
 
 
-def _assign_prs(to_assign, assigned_prs_per_user, gh_users, slack_users_by_gh_users_dict):
+def _assign_prs(to_assign, assigned_prs_per_user, slack_users_by_gh_users_dict):
     next_assignee_pr_count = 0
     for pr_number, pr_data in to_assign.items():
         pr_author = pr_data[0]
@@ -125,11 +144,11 @@ def _assign_prs(to_assign, assigned_prs_per_user, gh_users, slack_users_by_gh_us
         ticket_status = pr_data[3]
         _print_pr_info(pr_number, pr_title, pr_author, ticket_status, pr_url)
         next_assignee_pr_count = _assign_reviewer(pr_number, pr_author, assigned_prs_per_user, next_assignee_pr_count,
-                                                  gh_users, slack_users_by_gh_users_dict)
+                                                  slack_users_by_gh_users_dict)
 
 
 def assign_to_previously_assigned_if_possible(pr_number, pr_author, past_reviewers, assigned_prs_per_user, gh_users,
-                                              slack_users_by_gh_users_dict):
+slack_users_by_gh_users_dict):
     eligible_previous_reviewers = [user for user in past_reviewers if user in gh_users and user != pr_author]
     if eligible_previous_reviewers:
         reviewer = eligible_previous_reviewers[0]
@@ -163,7 +182,7 @@ def assign_pending_prs(prs, slack_users_by_gh_users_dict, gh_users):
                         to_assign[pr_number] = (pr_author, pr_url, pr_title, ticket_status)
             else:
                 _handle_approved_pr(pr_number, pr_title, pr_author, ticket_status, approvals, gh_users)
-    _assign_prs(to_assign, assigned_prs_per_user, gh_users, slack_users_by_gh_users_dict)
+    _assign_prs(to_assign, assigned_prs_per_user, slack_users_by_gh_users_dict)
 
 
 def main():
