@@ -147,16 +147,15 @@ def _assign_prs(to_assign, assigned_prs_per_user, slack_users_by_gh_users_dict):
                                                   slack_users_by_gh_users_dict)
 
 
-def assign_to_previously_assigned_if_possible(pr_number, pr_author, past_reviewers, assigned_prs_per_user, gh_users,
-slack_users_by_gh_users_dict):
+def _get_previously_assigned(pr_author, past_reviewers, gh_users):
     eligible_previous_reviewers = [user for user in past_reviewers if user in gh_users and user != pr_author]
-    if eligible_previous_reviewers:
-        reviewer = eligible_previous_reviewers[0]
-        assigned_prs_per_user[reviewer] = assigned_prs_per_user.get(reviewer, 0) + 1
-        print(f"  -> Reassigning to previous reviewer @{slack_users_by_gh_users_dict[reviewer]}")
-        add_reviewer(ORG, REPO, pr_number, reviewer, GH_TOKEN)
-        return True
-    return False
+    return eligible_previous_reviewers[0] if eligible_previous_reviewers else None
+
+
+def assign_to_previously_assigned(pr_number, reviewer, assigned_prs_per_user, slack_users_by_gh_users_dict):
+    assigned_prs_per_user[reviewer] = assigned_prs_per_user.get(reviewer, 0) + 1
+    print(f"  -> Reassigning to previous reviewer @{slack_users_by_gh_users_dict[reviewer]}")
+    add_reviewer(ORG, REPO, pr_number, reviewer, GH_TOKEN)
 
 
 def assign_pending_prs(prs, slack_users_by_gh_users_dict, gh_users):
@@ -175,10 +174,12 @@ def assign_pending_prs(prs, slack_users_by_gh_users_dict, gh_users):
                     reviewer = _handle_assigned_pr(reviewers, gh_users, slack_users_by_gh_users_dict)
                     assigned_prs_per_user[reviewer] = assigned_prs_per_user.get(reviewer, 0) + 1
                 else:
-                    assigned = assign_to_previously_assigned_if_possible(pr_number, pr_author, past_reviewers,
-                                                                         assigned_prs_per_user, gh_users,
-                                                                         slack_users_by_gh_users_dict)
-                    if not assigned:
+                    old_assignee = _get_previously_assigned(pr_author, past_reviewers, gh_users)
+                    if old_assignee:
+                        _print_pr_info(pr_number, pr_title, pr_author, ticket_status, pr_url)
+                        assign_to_previously_assigned(pr_number, old_assignee, assigned_prs_per_user,
+                                                                  slack_users_by_gh_users_dict)
+                    else:
                         to_assign[pr_number] = (pr_author, pr_url, pr_title, ticket_status)
             else:
                 _handle_approved_pr(pr_number, pr_title, pr_author, ticket_status, approvals, gh_users)
