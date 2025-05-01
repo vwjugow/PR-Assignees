@@ -50,12 +50,36 @@ def get_commit_status(org, repo, sha, token):
     status = response.json()
     return status["state"], status["statuses"]
 
+
+def get_merged_prs_last_30_days(org, repo, token):
+    from datetime import datetime, timedelta, timezone
+
+    thirty_days_ago = datetime.now(timezone.utc) - timedelta(days=30)
+    headers = _get_headers(token)
+    url = f"{GITHUB_API}/repos/{org}/{repo}/pulls?state=closed&sort=updated&direction=desc&per_page=100"
+    all_merged_prs = []
+    page = 1
+
+    while url and page <= 6:
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+        prs = response.json()
+        merged_prs = [
+            pr for pr in prs
+            if pr.get('merged_at') and datetime.fromisoformat(pr['merged_at'].replace('Z', '+00:00')) > thirty_days_ago
+        ]
+        all_merged_prs.extend(merged_prs)
+        link_header = response.headers.get("Link")
+        url = get_next_page_url(link_header)
+        print(f"Page {page} processed, merged prs: {len(all_merged_prs)}")
+        page += 1
+    return all_merged_prs
+
 def get_pr_approvers_and_past_reviewers(org, repo, pull_number, token):
     """
     Fetch the approvals for a GitHub Pull Request.
 
     Args:
-        github_api (str): The base URL for the GitHub API (e.g., 'https://api.github.com').
         org (str): The GitHub organization or username.
         repo (str): The GitHub repository name.
         pull_number (int): The number of the pull request.
