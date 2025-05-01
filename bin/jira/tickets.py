@@ -1,4 +1,6 @@
+import math
 import requests
+from datetime import datetime
 from requests.auth import HTTPBasicAuth
 
 def get_ticket_status(base_url, email, ticket_id, api_token):
@@ -63,3 +65,61 @@ def transition_ticket_to_qa_review(base_url, email, ticket_id, api_token):
     if transition_response.status_code != 204:
         raise Exception(f"Failed to transition ticket. Status Code: {transition_response.status_code}, Response: {transition_response.text}")
     return True
+
+def get_ticket_age_in_current_status(base_url, email, ticket_id, api_token):
+    """
+    Get the history of status transitions for a JIRA ticket.
+
+    Args:
+        base_url (str): The base URL of the JIRA instance (e.g., 'https://your-company.atlassian.net').
+        ticket_id (str): The JIRA ticket ID to check (e.g., 'PROJ-123').
+        email (str): Your JIRA account email.
+        api_token (str): Your JIRA API token.
+
+    Returns:
+        list: A list of dictionaries containing status transition details.
+              Each dictionary includes 'from', 'to', 'date', and 'days_in_status'.
+    """
+    auth = HTTPBasicAuth(email, api_token)
+    headers = {
+        "Accept": "application/json"
+    }
+    url = f"{base_url}/rest/api/3/issue/{ticket_id}?expand=changelog"
+    response = requests.get(url, headers=headers, auth=auth)
+    if response.status_code != 200:
+        raise Exception(f"Failed to fetch ticket data. Status Code: {response.status_code}, Response: {response.text}")
+
+    ticket_data = response.json()
+    changelog = ticket_data.get('changelog', {}).get('histories', [])
+
+    status_transitions = []
+    last_status_change_date = datetime.strptime(ticket_data['fields']['created'], '%Y-%m-%dT%H:%M:%S.%f%z')
+    current_status = ticket_data['fields']['status']['name']
+
+    # Collect all status transitions
+    for change in changelog:
+        for item in change['items']:
+            if item['field'] == 'status':
+                from_status = item['fromString']
+                to_status = item['toString']
+                transition_date = datetime.strptime(change['created'], '%Y-%m-%dT%H:%M:%S.%f%z')
+
+                status_transitions.append({
+                    'from': from_status,
+                    'to': to_status,
+                    'date': transition_date
+                })
+    # Sort transitions by date
+    status_transitions.sort(key=lambda x: x['date'])
+    # Calculate days in status after sorting
+    # for i, transition in enumerate(status_transitions):
+    #     if i == 0:
+    #         days_in_status = (transition['date'] - last_status_change_date).days
+    #     else:
+    #         days_in_status = (transition['date'] - status_transitions[i-1]['date']).days
+    #     transition['days_in_status'] = days_in_status
+    # Calculate days in current status from last transition to today
+    current_status_start_date = status_transitions[-1]['date'] if status_transitions else last_status_change_date
+    time_in_current_status = datetime.now(current_status_start_date.tzinfo) - current_status_start_date
+    days_in_current_status = math.ceil(float(time_in_current_status.total_seconds() / 3600) / 24.0) - 1
+    return days_in_current_status

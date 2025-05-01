@@ -4,7 +4,7 @@ import random
 import re
 
 from bin.gh.prs import add_reviewer, get_ready_prs_by_authors, get_pr_approvers_and_past_reviewers, get_pr_reviewers
-from bin.jira.tickets import get_ticket_status, transition_ticket_to_qa_review
+from bin.jira.tickets import get_ticket_status, transition_ticket_to_qa_review, get_ticket_age_in_current_status
 
 
 def load_config(config_file="config.json"):
@@ -80,10 +80,15 @@ def _handle_approved_pr(pr_number, pr_url, pr_title, ticket_number, pr_author, t
             print(f"  -> Please merge the PR")
 
 
-def _handle_assigned_pr(reviewers, gh_users, slack_users_by_gh_users_dict):
+def _handle_assigned_pr(reviewers, gh_users, slack_users_by_gh_users_dict, ticket_number):
     existing_reviewer = next(user for user in reviewers if user in gh_users)
     if existing_reviewer:
-        print(f"  -> PR already assigned to @{slack_users_by_gh_users_dict[existing_reviewer]}")
+        ticket_age = get_ticket_age_in_current_status(JIRA_BASE_URL, JIRA_EMAIL, ticket_number, JIRA_TOKEN)
+        if ticket_age == 0:
+            print(f"  -> PR already assigned to @{slack_users_by_gh_users_dict[existing_reviewer]}")
+        else:
+            print((f"  -> @{slack_users_by_gh_users_dict[existing_reviewer]} !!!! Ticket has been in waiting "
+                   f"your review for {ticket_age} days. Please don't delay any longer!"))
     return existing_reviewer
 
 
@@ -176,7 +181,7 @@ def assign_pending_prs(prs, slack_users_by_gh_users_dict, gh_users):
             if not _approved_by_us(approvals, gh_users):
                 if _assigned_to_us(reviewers, gh_users):
                     _print_pr_info(pr_number, pr_title, pr_author, ticket_status, pr_url)
-                    reviewer = _handle_assigned_pr(reviewers, gh_users, slack_users_by_gh_users_dict)
+                    reviewer = _handle_assigned_pr(reviewers, gh_users, slack_users_by_gh_users_dict, ticket_number)
                     assigned_prs_per_user[reviewer] = assigned_prs_per_user.get(reviewer, 0) + 1
                 else:
                     old_assignee = _get_previously_assigned(pr_author, past_reviewers, gh_users)
