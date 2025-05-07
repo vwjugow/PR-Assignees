@@ -22,6 +22,7 @@ ORG = CONFIG["github"]["org"]
 REPO = CONFIG["github"]["repo"]
 GH_TOKEN_FILE = CONFIG["github"]["token_file"]
 
+
 def load_authors(file_path):
     try:
         with open(file_path, "r") as file:
@@ -38,6 +39,7 @@ def load_authors(file_path):
         print(f"Error: Unable to read the authors file. Details: {e}")
         exit(1)
 
+
 def load_token(file_path):
     try:
         with open(file_path, "r") as file:
@@ -48,6 +50,7 @@ def load_token(file_path):
     except Exception as e:
         print(f"Error: Unable to read the token file. Details: {e}")
         exit(1)
+
 
 def generate_pr_approval_stats(slack_users_by_gh_users_dict, gh_token):
     merged_prs = get_merged_prs_last_30_days(ORG, REPO, gh_token)
@@ -70,12 +73,12 @@ def generate_pr_approval_stats(slack_users_by_gh_users_dict, gh_token):
     for approver, count in sorted(approval_counts.items(), key=lambda x: x[1], reverse=True):
         print(f"@{slack_users_by_gh_users_dict[approver]}: {count} PR{'s' if count != 1 else ''} approved")
 
+
 def main():
     gh_token = load_token(GH_TOKEN_FILE)
     slack_users_by_gh_users_dict = load_authors(AUTHORS_FILE)
-    gh_users = slack_users_by_gh_users_dict.keys()
-
     generate_pr_approval_stats(slack_users_by_gh_users_dict, gh_token)
+
 
 if __name__ == "__main__":
     main()

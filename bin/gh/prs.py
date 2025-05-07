@@ -4,6 +4,7 @@ import requests
 
 GITHUB_API = "https://api.github.com"
 
+
 def _get_headers(token):
     return {
         "Authorization": f"token {token}",
@@ -38,7 +39,6 @@ def get_ready_prs_by_authors(org, repo, authors, token):
         all_prs.extend([pr for pr in prs if _is_pr_ready_for_review(pr) and _is_pr_author_in_list(pr, authors)])
         link_header = response.headers.get("Link")
         url = get_next_page_url(link_header)
-            #url = link_header.split(",")[0].split(";")[0].strip("<>")
     return all_prs
 
 
@@ -71,21 +71,21 @@ def get_merged_prs_last_30_days(org, repo, token):
         all_merged_prs.extend(merged_prs)
         link_header = response.headers.get("Link")
         url = get_next_page_url(link_header)
-        print(f"Page {page} processed, merged prs: {len(all_merged_prs)}")
         page += 1
     return all_merged_prs
+
 
 def get_pr_approvers_and_past_reviewers(org, repo, pull_number, token):
     """
     Fetch the approvals for a GitHub Pull Request.
-
     Args:
+    -----
         org (str): The GitHub organization or username.
         repo (str): The GitHub repository name.
         pull_number (int): The number of the pull request.
         token (str): Your GitHub personal access token.
-
     Returns:
+    --------
         list: A list of usernames who approved the pull request.
     """
     url = f"{GITHUB_API}/repos/{org}/{repo}/pulls/{pull_number}/reviews"

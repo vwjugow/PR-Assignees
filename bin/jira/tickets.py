@@ -3,6 +3,7 @@ import requests
 from datetime import datetime
 from requests.auth import HTTPBasicAuth
 
+
 def get_ticket_status(base_url, email, ticket_id, api_token):
     """
     Fetch the status of a JIRA ticket using the JIRA API.
@@ -30,6 +31,7 @@ def get_ticket_status(base_url, email, ticket_id, api_token):
         return status
     else:
         raise Exception(f"Failed to fetch ticket data. Status Code: {response.status_code}, Response: {response.text}")
+
 
 def transition_ticket_to_qa_review(base_url, email, ticket_id, api_token):
     """
@@ -63,7 +65,8 @@ def transition_ticket_to_qa_review(base_url, email, ticket_id, api_token):
     payload = {"transition": {"id": transition_id}}
     transition_response = requests.post(transitions_url, headers=headers, auth=auth, json=payload)
     if transition_response.status_code != 204:
-        raise Exception(f"Failed to transition ticket. Status Code: {transition_response.status_code}, Response: {transition_response.text}")
+        raise Exception(f"Failed to transition ticket. Status Code: {transition_response.status_code}, Response: "
+                        f"{transition_response.text}")
     return True
 
 def get_ticket_age_in_current_status(base_url, email, ticket_id, api_token):
@@ -94,8 +97,6 @@ def get_ticket_age_in_current_status(base_url, email, ticket_id, api_token):
 
     status_transitions = []
     last_status_change_date = datetime.strptime(ticket_data['fields']['created'], '%Y-%m-%dT%H:%M:%S.%f%z')
-    current_status = ticket_data['fields']['status']['name']
-
     # Collect all status transitions
     for change in changelog:
         for item in change['items']:
@@ -111,13 +112,6 @@ def get_ticket_age_in_current_status(base_url, email, ticket_id, api_token):
                 })
     # Sort transitions by date
     status_transitions.sort(key=lambda x: x['date'])
-    # Calculate days in status after sorting
-    # for i, transition in enumerate(status_transitions):
-    #     if i == 0:
-    #         days_in_status = (transition['date'] - last_status_change_date).days
-    #     else:
-    #         days_in_status = (transition['date'] - status_transitions[i-1]['date']).days
-    #     transition['days_in_status'] = days_in_status
     # Calculate days in current status from last transition to today
     current_status_start_date = status_transitions[-1]['date'] if status_transitions else last_status_change_date
     time_in_current_status = datetime.now(current_status_start_date.tzinfo) - current_status_start_date

@@ -4,7 +4,8 @@ import random
 import re
 
 from bin.gh.prs import add_reviewer, get_ready_prs_by_authors, get_pr_approvers_and_past_reviewers, get_pr_reviewers
-from bin.jira.tickets import get_ticket_status, transition_ticket_to_qa_review, get_ticket_age_in_current_status
+from bin.jira.tickets import (get_ticket_status, transition_ticket_to_qa_review, get_ticket_age_in_current_status,
+                              transition_ticket_to_in_progress)
 
 
 def load_config(config_file="config.json"):
@@ -30,6 +31,7 @@ JIRA_TOKEN_FILE = CONFIG["jira"]["token_file"]
 JIRA_TICKET_NUMBER_RE = CONFIG["jira"]["ticket_number_regex"]
 
 
+
 def load_authors(file_path):
     try:
         with open(file_path, "r") as file:
@@ -46,6 +48,7 @@ def load_authors(file_path):
         print(f"Error: Unable to read the authors file. Details: {e}")
         exit(1)
 
+
 def load_token(file_path):
     try:
         with open(file_path, "r") as file:
@@ -61,6 +64,7 @@ def load_token(file_path):
 GH_TOKEN = load_token(GH_TOKEN_FILE)
 JIRA_TOKEN = load_token(JIRA_TOKEN_FILE)
 
+
 def _get_ticket_number_and_status(pr_title):
     if re.match(JIRA_TICKET_NUMBER_RE, pr_title):
         ticket_number = pr_title.split()[0]
@@ -74,10 +78,10 @@ def _handle_approved_pr(pr_number, pr_url, pr_title, ticket_number, pr_author, t
         if ticket_status == "code review":
             _print_pr_info(pr_number, pr_title, pr_author, ticket_status, pr_url)
             transition_ticket_to_qa_review(JIRA_BASE_URL, JIRA_EMAIL, ticket_number, JIRA_TOKEN)
-            print(f"  -> Ticket moved to QA")
+            print("  -> Ticket moved to QA")
         elif ticket_status == "in review":
             _print_pr_info(pr_number, pr_title, pr_author, ticket_status, pr_url)
-            print(f"  -> Please merge the PR")
+            print("  -> Please merge the PR")
 
 
 def _handle_assigned_pr(reviewers, gh_users, slack_users_by_gh_users_dict, ticket_number):
@@ -135,7 +139,10 @@ def _assign_reviewer(pr_number, pr_author, assigned_prs_per_user, next_assignee_
 
 
 def _is_ready_for_review(ticket_status):
-    return ticket_status and (ticket_status == "code review" or ticket_status == "qa review" or ticket_status == "in review")
+    return ticket_status and (
+        ticket_status == "code review" or ticket_status == "qa review" or ticket_status == "in review"
+    )
+
 
 def _approved_by_us(approvals, gh_users):
     return approvals and any(user in gh_users for user in approvals)
@@ -188,11 +195,12 @@ def assign_pending_prs(prs, slack_users_by_gh_users_dict, gh_users):
                     if old_assignee:
                         _print_pr_info(pr_number, pr_title, pr_author, ticket_status, pr_url)
                         assign_to_previously_assigned(pr_number, old_assignee, assigned_prs_per_user,
-                                                                  slack_users_by_gh_users_dict)
+                                                      slack_users_by_gh_users_dict)
                     else:
                         to_assign[pr_number] = (pr_author, pr_url, pr_title, ticket_status)
             else:
-                _handle_approved_pr(pr_number, pr_url, pr_title, ticket_number, pr_author, ticket_status, approvals, gh_users)
+                _handle_approved_pr(pr_number, pr_url, pr_title, ticket_number, pr_author, ticket_status, approvals,
+                                    gh_users)
     _assign_prs(to_assign, assigned_prs_per_user, slack_users_by_gh_users_dict)
 
 
@@ -206,6 +214,7 @@ def main():
         return
     assign_pending_prs(prs, slack_users_by_gh_users_dict, gh_users)
     print()
+
 
 if __name__ == "__main__":
     main()
