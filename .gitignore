@@ -1,3 +1,7 @@
+gh_token
+jira_token
+authors.txt
+
 # Vim
 *.sw?
 
