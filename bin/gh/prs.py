@@ -60,10 +60,11 @@ def get_commit_status(org, repo, sha, token):
     return status["state"], status["statuses"]
 
 
-def get_merged_prs_last_30_days(org, repo, token):
+def get_merged_prs_last_x_days(org, repo, token, last_days):
     from datetime import datetime, timedelta, timezone
 
-    thirty_days_ago = datetime.now(timezone.utc) - timedelta(days=30)
+    last_days = int(last_days)
+    thirty_days_ago = datetime.now(timezone.utc) - timedelta(days=last_days)
     headers = _get_headers(token)
     url = f"{GITHUB_API}/repos/{org}/{repo}/pulls?state=closed&sort=updated&direction=desc&per_page=100"
     all_merged_prs = []
