@@ -1,6 +1,7 @@
 gh_token
 jira_token
 authors.txt
+config.json
 
 # Vim
 *.sw?

@@ -1,0 +1,7 @@
+# Map GitHub usernames to Slack handles
+# Format: github_username:slack_username
+# One mapping per line
+
+johndoe:john.doe
+janedoe:Jane Doe
+bobsmith:Bob Smith
