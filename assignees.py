@@ -1,4 +1,5 @@
 #!./.venv/bin/python
+import argparse
 import json
 import random
 import re
@@ -32,9 +33,19 @@ JIRA_TOKEN_FILE = CONFIG["jira"]["token_file"]
 JIRA_TICKET_NUMBER_RE = CONFIG["jira"]["ticket_number_regex"]
 
 
+# Global debug flag
+DEBUG_MODE = False
+
+
+def debug_print(*args, **kwargs):
+    """Print debug information only when debug mode is enabled."""
+    if DEBUG_MODE:
+        print("DEBUG:", *args, **kwargs)
+
 
 def _project_first(tuples):
     return [t[0] for t in tuples]
+
 
 def load_authors(file_path):
     try:
@@ -200,15 +211,18 @@ def should_move_to_in_progress(changes_requesters, approvals, requested_reviewer
                         return True
     return False
 
+
 def assign_to_previously_assigned(pr_number, reviewer, assigned_prs_per_user, slack_users_by_gh_users_dict):
     assigned_prs_per_user[reviewer] = assigned_prs_per_user.get(reviewer, 0) + 1
     print(f"  -> Reassigning to previous reviewer @{slack_users_by_gh_users_dict[reviewer]}")
     add_reviewer(ORG, REPO, pr_number, reviewer, GH_TOKEN)
 
+
 def _move_to_in_progress(pr_number, pr_title, pr_author, ticket_status, pr_url, ticket_number):
     _print_pr_info(pr_number, pr_title, pr_author, ticket_status, pr_url)
     print("  -> Changes requested, moving ticket to 'In Progress'")
     # transition_ticket_to_in_progress(JIRA_BASE_URL, JIRA_EMAIL, ticket_number, JIRA_TOKEN)
+
 
 def assign_pending_prs(prs, slack_users_by_gh_users_dict, gh_users):
     assigned_prs_per_user = {u: 0 for u in gh_users}
@@ -249,6 +263,20 @@ def assign_pending_prs(prs, slack_users_by_gh_users_dict, gh_users):
 
 
 def main():
+    global DEBUG_MODE
+
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description='Assign pending pull requests to reviewers.')
+    parser.add_argument('--debug', '-d', action='store_true', help='Enable debug output')
+    args = parser.parse_args()
+
+    # Set debug mode globally
+    DEBUG_MODE = args.debug
+
+    # Also set debug mode in the prs module
+    from bin.gh import prs
+    prs.DEBUG_MODE = args.debug
+
     slack_users_by_gh_users_dict = load_authors(AUTHORS_FILE)
     gh_users = slack_users_by_gh_users_dict.keys()
     prs = get_ready_prs_by_authors(ORG, REPO, gh_users, GH_TOKEN)

@@ -4,6 +4,15 @@ import requests
 
 GITHUB_API = "https://api.github.com"
 
+# Global debug flag
+DEBUG_MODE = False
+
+
+def debug_print(*args, **kwargs):
+    """Print debug information only when debug mode is enabled."""
+    if DEBUG_MODE:
+        print("DEBUG:", *args, **kwargs)
+
 
 def _get_headers(token):
     return {
