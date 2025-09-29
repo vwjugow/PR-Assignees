@@ -279,12 +279,12 @@ def main():
 
     slack_users_by_gh_users_dict = load_authors(AUTHORS_FILE)
     gh_users = slack_users_by_gh_users_dict.keys()
-    prs = get_ready_prs_by_authors(ORG, REPO, gh_users, GH_TOKEN)
+    prs_list = get_ready_prs_by_authors(ORG, REPO, gh_users, GH_TOKEN)
 
-    if not prs:
+    if not prs_list:
         print("No pull requests found for this user.")
         return
-    assign_pending_prs(prs, slack_users_by_gh_users_dict, gh_users)
+    assign_pending_prs(prs_list, slack_users_by_gh_users_dict, gh_users)
     print()
 
 
