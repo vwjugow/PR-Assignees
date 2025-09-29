@@ -77,7 +77,8 @@ def get_merged_prs_last_30_days(org, repo, token):
 
 def get_pr_approvers_and_past_reviewers(org, repo, pull_number, token):
     """
-    Fetch the approvals for a GitHub Pull Request.
+    Fetch the approvals and requested reviewers for a GitHub Pull Request,
+    including the timestamps for when reviewers were requested.
     Args:
     -----
         org (str): The GitHub organization or username.
@@ -86,22 +87,58 @@ def get_pr_approvers_and_past_reviewers(org, repo, pull_number, token):
         token (str): Your GitHub personal access token.
     Returns:
     --------
-        list: A list of usernames who approved the pull request.
+        tuple: A tuple containing:
+            - list: A list of tuples containing the usernames of approved reviewers and the timestamp
+                they were requested.
+            - list: A list of tuples containing the usernames of past reviewers and the timestamp
+                they were requested.
+            - list: A list of tuples containing the usernames who requested changes and the timestamp
+                they were requested.
+            - list: A list of usernames of requested reviewers.
+            - list: A list of tuples containing the usernames of requested reviewers and the timestamp
+                they were requested.
     """
-    url = f"{GITHUB_API}/repos/{org}/{repo}/pulls/{pull_number}/reviews"
+    from datetime import datetime, timezone
+
     headers = _get_headers(token)
-    response = requests.get(url, headers=headers)
+    # Get reviews
+    reviews_url = f"{GITHUB_API}/repos/{org}/{repo}/pulls/{pull_number}/reviews"
+    response = requests.get(reviews_url, headers=headers)
     response.raise_for_status()
     reviews = response.json()
     approvals = [
         review for review in reviews if review['state'] == "APPROVED"
     ]
-    non_approvals = [
-        review for review in reviews if review['state'] != "APPROVED"
+    changes_requested = [
+        review for review in reviews if review['state'] == "CHANGES_REQUESTED"
     ]
-    approvers = [rv["user"]["login"].lower() for rv in approvals]
-    non_approvers = [rv["user"]["login"].lower() for rv in non_approvals if rv["user"]["login"] not in approvers]
-    return approvers, non_approvers
+    non_approvals = [
+        review for review in reviews if review['state'] not in ["APPROVED", "CHANGES_REQUESTED"]
+    ]
+    today = datetime.now(timezone.utc)
+    approvers = [(rv["user"]["login"].lower(), rv.get("submitted_at", today)) for rv in approvals]
+    changes_requesters = [(rv["user"]["login"].lower(), rv.get("submitted_at", today)) for rv in changes_requested]
+    non_approvers = [(rv["user"]["login"].lower(), rv.get("submitted_at", today)) for rv in non_approvals
+                     if rv["user"]["login"] not in [rv["user"]["login"].lower() for rv in approvals]]
+
+    # Get requested reviewers
+    requested_reviewers_usernames = get_pr_reviewers(org, repo, pull_number, token)
+    # Get PR timeline to find requested_at timestamps
+    timeline_url = f"{GITHUB_API}/repos/{org}/{repo}/issues/{pull_number}/timeline"
+    response = requests.get(timeline_url, headers=headers)
+    response.raise_for_status()
+    timeline_events = response.json()
+    requested_reviewers = []
+    for requested_reviewer in requested_reviewers_usernames:
+        requested_reviewer_tuple = (requested_reviewer.lower(), None)
+        for event in timeline_events:
+            debug_print("events. event:", event)
+            if event["event"] == "review_requested" and event.get("requested_reviewer", {}).get(
+                    "login", "").lower() == requested_reviewer:
+                if not requested_reviewer_tuple[1] or event["created_at"] > requested_reviewer_tuple[1]:
+                    requested_reviewer_tuple = (requested_reviewer.lower(), event["created_at"])
+        requested_reviewers.append(requested_reviewer_tuple)
+    return approvers, non_approvers, changes_requesters, requested_reviewers
 
 
 def get_pr_reviewers(org, repo, pull_number, token):

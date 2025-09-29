@@ -69,6 +69,42 @@ def transition_ticket_to_qa_review(base_url, email, ticket_id, api_token):
                         f"{transition_response.text}")
     return True
 
+
+def transition_ticket_to_in_progress(base_url, email, ticket_id, api_token):
+    """
+    Transition a JIRA ticket to the 'In Progress' status using the JIRA API.
+
+    Args:
+        base_url (str): The base URL of the JIRA instance (e.g., 'https://your-company.atlassian.net').
+        ticket_id (str): The JIRA ticket ID to transition (e.g., 'PROJ-123').
+        email (str): Your JIRA account email.
+        api_token (str): Your JIRA API token.
+
+    Raises:
+        Exception: If the transition fails or 'In Progress' is not a valid transition.
+    """
+    auth = HTTPBasicAuth(email, api_token)
+    headers = {
+        "Accept": "application/json",
+        "Content-Type": "application/json"
+    }
+    transitions_url = f"{base_url}/rest/api/3/issue/{ticket_id}/transitions"
+    response = requests.get(transitions_url, headers=headers, auth=auth)
+    if response.status_code != 200:
+        raise Exception(f"Failed to fetch transitions. Status Code: {response.status_code}, Response: {response.text}")
+    transitions = response.json().get("transitions", [])
+    in_progress_transition = next((t for t in transitions if t["to"]["name"].upper() == "IN PROGRESS"), None)
+    if not in_progress_transition:
+        raise Exception(f"No transition to 'In Progress' available for ticket {ticket_id}.")
+    transition_id = in_progress_transition["id"]
+    payload = {"transition": {"id": transition_id}}
+    transition_response = requests.post(transitions_url, headers=headers, auth=auth, json=payload)
+    if transition_response.status_code != 204:
+        raise Exception(f"Failed to transition ticket. Status Code: {transition_response.status_code}, Response: "
+                        f"{transition_response.text}")
+    return True
+
+
 def get_ticket_age_in_current_status(base_url, email, ticket_id, api_token):
     """
     Get the history of status transitions for a JIRA ticket.
